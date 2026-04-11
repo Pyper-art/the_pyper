@@ -30,7 +30,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
   console.log('igothere2')
   // Change this to your deployed Piper backend URL
-  const API_BASE = "http://localhost:8000";
+  const API_BASE = "https://experiments-ml-1.onrender.com";
 
   fetch(`${API_BASE}`)
     .then((response) => {
