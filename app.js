@@ -1,17 +1,13 @@
-console.log("Piper Chat UI loaded");
+console.log("Piper Chat UI loaded - Dark Theme Edit");
 
 const API_BASE = "https://experiments-ml-1.onrender.com";
 
-fetch(`${API_BASE}`)
-  .then((response) => {
-    console.log("Health check response status:", response.status);
-    if (!response.ok) throw new Error("Network response was not ok");
-    return response.json(); // Parses JSON response into native JS object
-  })
-  .then((data) => console.log(data))
-  .catch((error) => console.error("Fetch error:", error));
+// Basic health check
+fetch(`${API_BASE}/health`)
+  .then((response) => response.json())
+  .then((data) => console.log("Piper System Health:", data))
+  .catch((error) => console.error("Health Check failed:", error));
 
-// app.js - Piper Chat UI
 document.addEventListener("DOMContentLoaded", function () {
   const messageInput = document.getElementById("message-input");
   const sendBtn = document.getElementById("send-btn");
@@ -23,30 +19,18 @@ document.addEventListener("DOMContentLoaded", function () {
   const messages = document.getElementById("messages");
   const newChatBtn = document.getElementById("new-chat");
 
-  console.log('igothere')
-  // const loadingModal = new bootstrap.Modal(
-  //   document.getElementById("loading-modal"),
-  // );
-
-  console.log('igothere2')
-  // Change this to your deployed Piper backend URL
-  const API_BASE = "https://experiments-ml-1.onrender.com";
-
-  fetch(`${API_BASE}`)
-    .then((response) => {
-      console.log("Health check response status:", response.status);
-      if (!response.ok) throw new Error("Network response was not ok");
-      return response.json(); // Parses JSON response into native JS object
-    })
-    .then((data) => console.log(data))
-    .catch((error) => console.error("Fetch error:", error));
-
   let currentFile = null;
   let chatHistory = [];
+  let isTyping = false; // Prevent multiple requests at once
 
   // Initialize welcome message time
-  document.getElementById("welcome-time").textContent =
-    new Date().toLocaleTimeString();
+  document.getElementById("welcome-time").textContent = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+  // Auto-resize textarea
+  messageInput.addEventListener('input', function() {
+    this.style.height = 'auto';
+    this.style.height = (this.scrollHeight < 150 ? this.scrollHeight : 150) + 'px';
+  });
 
   // Event listeners
   messageInput.addEventListener("keypress", function (e) {
@@ -67,8 +51,7 @@ document.addEventListener("DOMContentLoaded", function () {
     if (file) {
       currentFile = file;
       fileName.textContent = file.name;
-      filePreview.classList.remove("d-none");
-      attachBtn.innerHTML = '<i class="fas fa-file-csv"></i>';
+      filePreview.classList.remove("hidden");
       attachBtn.classList.add("attached");
     }
   }
@@ -76,60 +59,103 @@ document.addEventListener("DOMContentLoaded", function () {
   function removeFile() {
     currentFile = null;
     fileInput.value = "";
-    filePreview.classList.add("d-none");
-    attachBtn.innerHTML = '<i class="fas fa-paperclip"></i>';
+    filePreview.classList.add("hidden");
     attachBtn.classList.remove("attached");
   }
 
   function startNewChat() {
-    messages.innerHTML = "";
+    // Preserve welcome message, remove others
+    const welcomeHtml = messages.querySelector('.welcome-message').outerHTML;
+    messages.innerHTML = welcomeHtml;
     chatHistory = [];
     removeFile();
+    messageInput.value = "";
+    messageInput.style.height = 'auto';
     messageInput.focus();
   }
 
+  // --- Inline Typing Indicator Logic ---
+  let typingIndicatorId = null;
+
+  function showTypingIndicator() {
+    isTyping = true;
+    const typingDiv = document.createElement("div");
+    typingDiv.className = "message bot-message";
+    typingDiv.id = "typing-indicator";
+    
+    // UUID-ish id to make sure we remove the right one
+    typingIndicatorId = "typing-" + Date.now();
+    typingDiv.dataset.id = typingIndicatorId;
+
+    typingDiv.innerHTML = `
+      <div class="message-avatar"><i class="fas fa-robot"></i></div>
+      <div class="message-content">
+        <div class="message-header">
+          <span class="message-sender">Piper</span>
+        </div>
+        <div class="typing-indicator">
+          <div class="dot"></div>
+          <div class="dot"></div>
+          <div class="dot"></div>
+        </div>
+      </div>
+    `;
+    
+    messages.appendChild(typingDiv);
+    messages.scrollTop = messages.scrollHeight;
+  }
+
+  function hideTypingIndicator() {
+    isTyping = false;
+    const indicator = document.getElementById("typing-indicator");
+    if (indicator) {
+      indicator.remove();
+    }
+  }
+
   async function sendMessage() {
+    if (isTyping) return;
+    
     const message = messageInput.value.trim();
     if (!message && !currentFile) return;
 
     // Add user message to chat
     addMessage("user", message, currentFile);
+    
+    // Clean up input
     messageInput.value = "";
+    messageInput.style.height = 'auto';
+    
     const fileToSend = currentFile;
-    removeFile(); // Clear file after sending
+    removeFile(); // Clear file preview immediately after appending visually
 
-    // loadingModal.show();
+    showTypingIndicator();
 
     try {
       let response;
       if (fileToSend) {
-        // Use analyze endpoint with file
         response = await sendFileMessage(message, fileToSend);
       } else {
-        // Use regular query endpoint
         response = await sendTextMessage(message);
       }
-
-      // Add bot response to chat
+      
+      hideTypingIndicator();
       addMessage("bot", response);
+      
     } catch (error) {
-      addMessage("bot", `Error: ${error.message}`, null, true);
-    } finally {
-      // loadingModal.hide();
+      hideTypingIndicator();
+      addMessage("bot", `Error connecting to Piper: ${error.message}`, null, true);
     }
   }
 
   async function sendTextMessage(message) {
-    console.log("Sending text message:", message);
     const response = await fetch(`${API_BASE}/piper/query`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({ query: message, user_id: "string" }), // Include user_id for better tracking
+      body: JSON.stringify({ query: message }),
     });
-
-    console.log("Text message response status:", response.status);  
 
     if (!response.ok) {
       throw new Error(`HTTP ${response.status}: ${response.statusText}`);
@@ -146,16 +172,10 @@ document.addEventListener("DOMContentLoaded", function () {
       formData.append("query", message);
     }
 
-    console.log("Sending file message with formData:", formData);
-
     const response = await fetch(`${API_BASE}/piper/report/analyze`, {
       method: "POST",
       body: formData,
     });
-
-    console.log("File message response status:", response.status);
-
-
 
     if (!response.ok) {
       throw new Error(`HTTP ${response.status}: ${response.statusText}`);
@@ -166,103 +186,111 @@ document.addEventListener("DOMContentLoaded", function () {
   }
 
   function formatAnalysisResponse(data) {
-    let response = "";
+    // We can rely on marked.js to render this, so we just build a markdown string
+    let md = "";
 
     // Summary
     if (data.summary && data.summary.text) {
-      response += data.summary.text + "\n\n";
+      md += data.summary.text + "\n\n";
     }
 
     // Actions
     if (data.actions && data.actions.length > 0) {
-      response += "**Recommended Actions:**\n";
+      md += "**Recommended Actions:**\n";
       data.actions.forEach((action) => {
-        response += `• ${action.action} (${action.confidence} confidence)\n`;
-        if (action.rationale) {
-          response += `  ${action.rationale}\n`;
-        }
+        md += `- **${action.action}** (${action.confidence} confidence)\n  ${action.rationale}\n`;
       });
-      response += "\n";
+      md += "\n";
     }
 
     // Cross-analysis insights
     if (data.cross_analysis) {
       const cross = data.cross_analysis;
       if (cross.soer && cross.soer.length > 0) {
-        response += "**Stock-Out Risk (SOER):**\n";
+        md += "**Stock-Out Risk (SOER):**\n";
         cross.soer.slice(0, 3).forEach((soer) => {
-          response += `• ${soer.location}: ${soer.soer}% SOER\n`;
+          md += `- ${soer.location}: ${soer.soer}% SOER\n`;
         });
-        response += "\n";
+        md += "\n";
       }
 
       if (cross.restock) {
-        response += `**Restock Signals:** ${cross.restock.urgent_count} urgent, ${cross.restock.monitor_count} monitor\n\n`;
+        md += `**Restock Signals:** ${cross.restock.urgent_count} urgent, ${cross.restock.monitor_count} monitor\n\n`;
       }
 
       if (cross.note) {
-        response += `*${cross.note}*\n\n`;
+        md += `*${cross.note}*\n\n`;
       }
     }
 
-    return (
-      response ||
-      "Analysis complete. Check the details below for more information."
-    );
+    return md || "Analysis complete. View details in the dashboard.";
   }
 
   function addMessage(sender, content, file = null, isError = false) {
+    // Hide welcome message if it's the first actual message
+    const welcome = document.querySelector('.welcome-message');
+    if (welcome && welcome.style.display !== 'none') {
+      welcome.style.display = 'none';
+    }
+
     const messageDiv = document.createElement("div");
-    messageDiv.className = `message ${sender}-message`;
+    // Append 'error-message' class if it's an error
+    let cls = `message ${sender}-message`;
+    if (isError) cls += " error-message";
+    messageDiv.className = cls;
 
-    const avatar = document.createElement("div");
-    avatar.className = "message-avatar";
-    avatar.innerHTML =
-      sender === "user"
-        ? '<i class="fas fa-user"></i>'
-        : '<i class="fas fa-robot"></i>';
+    const isUser = sender === "user";
+    const avatarHtml = isUser
+      ? '<div class="message-avatar"><i class="fas fa-user"></i></div>'
+      : '<div class="message-avatar"><i class="fas fa-robot"></i></div>';
 
-    const contentDiv = document.createElement("div");
-    contentDiv.className = "message-content";
+    const timeString = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
-    const header = document.createElement("div");
-    header.className = "message-header";
-    header.innerHTML = `
-      <span class="message-sender">${sender === "user" ? "You" : "Piper"}</span>
-      <span class="message-time">${new Date().toLocaleTimeString()}</span>
+    const headerHtml = `
+      <div class="message-header">
+        <span class="message-sender">${isUser ? "You" : "Piper"}</span>
+        <span class="message-time">${timeString}</span>
+      </div>
     `;
 
-    const textDiv = document.createElement("div");
-    textDiv.className = "message-text";
-
+    // Content processing
+    let contentHtml = "";
     if (file) {
-      textDiv.innerHTML += `
+      contentHtml += `
         <div class="file-attachment">
           <i class="fas fa-file-csv"></i> ${file.name}
         </div>
       `;
     }
 
-    if (isError) {
-      textDiv.innerHTML += `<div class="alert alert-danger">${content}</div>`;
-    } else {
-      // Convert markdown-style formatting to HTML
-      const formattedContent = content
-        .replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>")
-        .replace(/\*(.*?)\*/g, "<em>$1</em>")
-        .replace(/\n/g, "<br>");
-      textDiv.innerHTML += formattedContent;
+    if (content) {
+      // Use marked plugin if it's the bot, else escape standard text for user
+      if (isUser) {
+        // basic escape to prevent HTML injection in user text
+        const span = document.createElement('span');
+        span.textContent = content;
+        contentHtml += span.innerHTML;
+      } else {
+        // Parse markdown for bot 
+        contentHtml += window.marked ? marked.parse(content) : content;
+      }
     }
 
-    contentDiv.appendChild(header);
-    contentDiv.appendChild(textDiv);
-    messageDiv.appendChild(avatar);
-    messageDiv.appendChild(contentDiv);
+    // Assemble completely
+    messageDiv.innerHTML = `
+      ${avatarHtml}
+      <div class="message-content">
+        ${headerHtml}
+        <div class="message-text">
+          ${contentHtml}
+        </div>
+      </div>
+    `;
 
     messages.appendChild(messageDiv);
     messages.scrollTop = messages.scrollHeight;
 
-    // Add to chat history
+    // Save to memory
     chatHistory.push({
       sender,
       content,
