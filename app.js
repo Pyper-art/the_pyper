@@ -3,7 +3,7 @@ console.log("Piper Chat UI loaded - Dark Theme Edit");
 const API_BASE = "https://experiments-ml-1.onrender.com";
 
 // Basic health check
-fetch(`${API_BASE}/health`)
+fetch(`${API_BASE}/piper/health`)
   .then((response) => response.json())
   .then((data) => console.log("Piper System Health:", data))
   .catch((error) => console.error("Health Check failed:", error));
