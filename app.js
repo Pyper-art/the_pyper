@@ -1,6 +1,25 @@
 console.log("Piper Chat UI loaded - Dark Theme Edit");
 
-const API_BASE = "https://experiments-ml-1.onrender.com";
+// --- Backend selection -------------------------------------------------
+// When the page is opened locally (file:// or localhost) we talk to a local
+// Piper server; when it is served from a real host we use the deployment.
+const LOCAL_API = "http://127.0.0.1:8002";
+const REMOTE_API = "https://experiments-ml-1.onrender.com";
+const IS_LOCAL =
+  location.protocol === "file:" ||
+  ["localhost", "127.0.0.1", ""].includes(location.hostname);
+const API_BASE = IS_LOCAL ? LOCAL_API : REMOTE_API;
+
+// Optional API key. Leave empty for local testing when the server runs with
+// PIPER_DISABLE_AUTH=1. Set it to hit a deployment that enforces auth.
+const API_KEY = "";
+
+// Build request headers, attaching the api_key only when one is configured.
+function withApiKey(headers = {}) {
+  return API_KEY ? { ...headers, api_key: API_KEY } : headers;
+}
+
+console.log("Piper UI -> API_BASE:", API_BASE);
 
 // Basic health check
 fetch(`${API_BASE}/piper/health`)
@@ -151,9 +170,7 @@ document.addEventListener("DOMContentLoaded", function () {
   async function sendTextMessage(message) {
     const response = await fetch(`${API_BASE}/piper/query`, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
+      headers: withApiKey({ "Content-Type": "application/json" }),
       body: JSON.stringify({ query: message }),
     });
 
@@ -174,6 +191,9 @@ document.addEventListener("DOMContentLoaded", function () {
 
     const response = await fetch(`${API_BASE}/piper/report/analyze`, {
       method: "POST",
+      // Do NOT set Content-Type for FormData — the browser adds the multipart
+      // boundary. Only attach the api_key header when one is configured.
+      headers: withApiKey(),
       body: formData,
     });
 
