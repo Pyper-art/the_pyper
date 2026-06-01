@@ -12,7 +12,7 @@ const API_BASE = IS_LOCAL ? LOCAL_API : REMOTE_API;
 
 // Optional API key. Leave empty for local testing when the server runs with
 // PIPER_DISABLE_AUTH=1. Set it to hit a deployment that enforces auth.
-const API_KEY = "";
+const API_KEY = "nxl_live_Kkm_rAFYf1iLrN4CLc02AxI3lEt_hq14";
 
 // Build request headers, attaching the api_key only when one is configured.
 function withApiKey(headers = {}) {
